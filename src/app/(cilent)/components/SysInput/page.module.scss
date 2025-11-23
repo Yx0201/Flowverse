@@ -1,0 +1,64 @@
+$inputBorderRadius: 20px;
+
+.inputRoot {
+  width: 30%;
+  height: 20vh;
+  // min-height: 30vh;
+  max-height: 60vh;
+  background-color: rgba(206, 203, 203, 0.1);
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  border-radius: $inputBorderRadius;
+  border: 1px solid rgba(1, 1, 1, 0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0);
+  &:hover,
+  &:focus-within {
+    box-shadow: 6px 4px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  transition-property: box-shadow, height;
+  transition-duration: 0.3s, 0.5s;
+  transition-timing-function: ease, ease;
+  .inputContent {
+    border-radius: 0;
+    padding: 15px;
+    resize: none;
+    flex: 1;
+    overflow-y: auto;
+    border: none;
+    position: relative;
+    border-radius: $inputBorderRadius $inputBorderRadius 0 0;
+    &:focus {
+      outline: none;
+    }
+    background-color: transparent;
+    transition: height 0.4s ease;
+
+    &.disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+  .inputTool {
+    width: 100%;
+    height: 4vh;
+    padding: 0 15px;
+    flex-shrink: 0;
+    border-radius: 0 0 $inputBorderRadius $inputBorderRadius;
+    display: flex;
+    gap: 10px;
+
+    .toolItem {
+      color: rgba(1, 1, 1, 0.4);
+      cursor: pointer;
+      transition: color 0.2s ease;
+      &:hover {
+        color: rgba(1, 1, 1, 0.7);
+      }
+    }
+  }
+}

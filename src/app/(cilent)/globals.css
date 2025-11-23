@@ -1,0 +1,20 @@
+*{
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+}
+
+.sysRoot{
+  width: 100vw;
+  height: 100vh;
+}
+
+.descText{
+  color: #bfbfbf;
+  font-size: 0.875rem;
+  text-align: center;
+}
