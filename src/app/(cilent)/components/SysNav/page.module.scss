@@ -1,21 +1,25 @@
 .navRoot {
   position: fixed;
-  width: 100%;
+  width: 30%;
   height: 10%;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   z-index: 1000;
+  top: 0;
+  right:0;
   gap: 20px;
   &::after {
     content: "";
     width: 20px;
   }
+  background-color: aqua;
 }
 
 .navItem {
   padding: 4px;
   position: relative;
+  user-select: none;
   cursor: pointer;
 
   overflow: hidden;

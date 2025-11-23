@@ -37,7 +37,7 @@ const SysNav = () => {
         message.info('Agent feature coming soon');
         break;
       case 'Github':
-        window.open('https://github.com', '_blank');
+        window.open('https://github.com/Yx0201/Flowverse', '_blank');
         break;
       case 'Logout':
         handleLogout();

@@ -6,52 +6,52 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import useContentHeight from "@/app/(cilent)/hook/useContentHeight";
 import BookOutlined from "@ant-design/icons/lib/icons/BookOutlined";
 import UploadOutlined from "@ant-design/icons/lib/icons/UploadOutlined";
-import { Button } from "antd";
+import { Button, message } from "antd";
 
 interface SysInputProps {
-  inputChange: (value: string) => void;
   disabled?: boolean;
   isStreaming?: boolean;
+  onSendMessage?: (message: string) => Promise<void>;
   onStopStreaming?: () => void;
 }
 
 const SysInput = ({
-  inputChange,
   disabled = false,
   isStreaming = false,
+  onSendMessage,
   onStopStreaming
 }: SysInputProps) => {
-  'use memo'; // Opt-in for React Compiler optimization
-
   const [value, setValue] = useState("");
-  const [isComposing, setIsComposing] = useState(false); // 跟踪中文输入法状态
-  const lastKeyDownTime = useRef<number>(0); // 记录最后一次按键时间
+  const [isComposing, setIsComposing] = useState(false);
 
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const textBox = useRef<HTMLDivElement>(null);
+  const inputTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const { measureContentHeight } = useContentHeight();
 
   // 安全地计算窗口相关的高度，避免在服务器端访问window
   const getSafeHeightCalculations = useCallback(() => {
-    if (typeof window === 'undefined') {
+    if (typeof window === "undefined") {
       // 服务器端渲染时的默认值
       return { DEFAULT_HEIGHT: 120, TOOL_HEIGHT: 30 };
     }
     return {
       DEFAULT_HEIGHT: 0.16 * window.innerHeight + 15, //16vh + 15px padding
-      TOOL_HEIGHT: 0.04 * window.innerHeight //4vh
+      TOOL_HEIGHT: 0.04 * window.innerHeight, //4vh
     };
   }, []);
 
-  const [heightCalculations, setHeightCalculations] = useState(getSafeHeightCalculations);
+  const [heightCalculations, setHeightCalculations] = useState(
+    getSafeHeightCalculations
+  );
 
   // 在客户端挂载后更新高度计算
   useEffect(() => {
     setHeightCalculations(getSafeHeightCalculations());
   }, [getSafeHeightCalculations]);
 
-  // Optimize the height adjustment logic with useCallback
+  // 优化高度调整逻辑
   const adjustHeight = useCallback(() => {
     if (!textAreaRef.current || !textBox.current) return;
 
@@ -66,132 +66,148 @@ const SysInput = ({
       textBoxEl.style.height = allHeight + TOOL_HEIGHT + "px";
     } else if (allHeight === defaultHeight && defaultHeight > DEFAULT_HEIGHT) {
       const actualHeight = measureContentHeight(textArea);
-      const finalHeight = actualHeight < DEFAULT_HEIGHT ? DEFAULT_HEIGHT : actualHeight;
+      const finalHeight =
+        actualHeight < DEFAULT_HEIGHT ? DEFAULT_HEIGHT : actualHeight;
       textArea.style.height = finalHeight + "px";
       textBoxEl.style.height = finalHeight + TOOL_HEIGHT + "px";
     }
   }, [heightCalculations, measureContentHeight]);
 
-  // Only run effect when value changes, with optimized cleanup
+  // 仅在值变化时运行效果，使用优化的清理
   useEffect(() => {
     adjustHeight();
   }, [value, adjustHeight]);
 
-  // Optimize event handlers with useCallback to prevent unnecessary re-renders
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    if (!disabled) {
-      setValue(e.target.value);
+  // 发送消息处理
+  const handleSendMessage = useCallback(async () => {
+    const trimmedValue = value.trim();
+
+    // 验证输入
+    if (!trimmedValue) {
+      message.warning('请输入消息内容');
+      return;
     }
-  }, [disabled]);
 
-  const handleCompositionStart = useCallback(() => {
-    setIsComposing(true);
-  }, []);
+    if (isStreaming) {
+      message.warning('AI正在回复中，请稍后再试');
+      return;
+    }
 
-  const handleCompositionEnd = useCallback(() => {
-    // 延迟一点时间设置isComposing为false，确保keydown事件处理完成
-    setTimeout(() => {
-      setIsComposing(false);
-    }, 10);
-  }, []);
+    if (!onSendMessage) {
+      message.error('发送功能未配置');
+      return;
+    }
 
+    try {
+      // 清空输入框
+      setValue("");
+
+      // 重置高度
+      if (textAreaRef.current && textBox.current) {
+        textAreaRef.current.style.height = "";
+        textBox.current.style.height = "";
+      }
+
+      // 调用发送消息回调
+      await onSendMessage(trimmedValue);
+    } catch (error) {
+      console.error('发送消息失败:', error);
+      message.error('发送失败，请重试');
+
+      // 恢复输入框内容
+      setValue(trimmedValue);
+    }
+  }, [value, isStreaming, onSendMessage]);
+
+  // 停止流式回复
+  const handleStopStreaming = useCallback(() => {
+    if (onStopStreaming) {
+      onStopStreaming();
+    }
+  }, [onStopStreaming]);
+
+  // 键盘事件处理
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    const currentTime = Date.now();
-    lastKeyDownTime.current = currentTime;
-
-    // 处理Enter键事件
-    if (e.key === "Enter") {
-      // Command+Enter 或 Ctrl+Enter：换行
-      if (e.metaKey || e.ctrlKey) {
-        // 允许默认的换行行为
-        return;
-      }
-
-      // 普通Enter：发送消息
-      // 检查是否在中文输入法状态下
-      if (isComposing) {
-        // 在中文输入法状态下，阻止默认行为，等待输入完成
-        e.preventDefault();
-        return;
-      }
-
-      // 检查是否有选中的文本（中文输入法候选词状态）
-      const selection = textAreaRef.current?.value?.slice(
-        textAreaRef.current?.selectionStart || 0,
-        textAreaRef.current?.selectionEnd || 0
-      );
-
-      // 如果有选中的文本且没有空格，可能是中文输入法的候选词
-      if (selection && selection.length > 0 && !selection.includes(' ') && selection !== value.trim()) {
-        e.preventDefault();
-        return;
-      }
-
-      // 检查光标是否在单词中间（没有空格分隔）
-      const textBeforeCursor = value.slice(0, textAreaRef.current?.selectionStart || 0);
-      const textAfterCursor = value.slice(textAreaRef.current?.selectionEnd || 0);
-
-      // 如果光标前后都没有空格，可能是在单词中间输入中文
-      if (
-        textBeforeCursor.length > 0 &&
-        !textBeforeCursor.endsWith(' ') &&
-        !textBeforeCursor.endsWith('\n') &&
-        textAfterCursor.length > 0 &&
-        !textAfterCursor.startsWith(' ') &&
-        !textAfterCursor.startsWith('\n')
-      ) {
-        e.preventDefault();
-        return;
-      }
-
-      // 所有检查通过，发送消息
+    // 处理Enter发送
+    if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
       e.preventDefault();
-      if (value.trim() && !disabled) {
-        inputChange(value);
-        setValue("");
-      }
+      handleSendMessage();
     }
-  }, [isComposing, value, disabled, inputChange]);
+
+    // 处理Cmd+Enter换行
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      // 在当前光标位置插入换行符
+      const target = e.currentTarget;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const newValue = value.substring(0, start) + '\n' + value.substring(end);
+
+      setValue(newValue);
+
+      // 设置光标位置到换行后
+      setTimeout(() => {
+        target.selectionStart = target.selectionEnd = start + 1;
+      }, 0);
+    }
+  }, [handleSendMessage, isComposing, value]);
+
+  // 清理定时器
+  useEffect(() => {
+    const timeoutId = inputTimeoutRef.current;
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, []);
 
   return (
     <div className={styles.inputRoot} ref={textBox}>
       <textarea
-        placeholder={isStreaming ? "AI正在思考中..." : "开始对话... (Enter发送，Cmd+Enter换行)"}
+        placeholder="Enter发送，Cmd+Enter换行"
         className={`${styles.inputContent} ${disabled ? styles.disabled : ''}`}
         ref={textAreaRef}
         value={value}
-        onChange={handleInputChange}
-        disabled={disabled}
-        onCompositionStart={handleCompositionStart}
-        onCompositionEnd={handleCompositionEnd}
-        onKeyDown={handleKeyDown}
         autoFocus={true}
+        disabled={disabled || isStreaming}
+        onChange={(e) => setValue(e.currentTarget.value)}
+        onKeyDown={handleKeyDown}
+        onCompositionStart={() => setIsComposing(true)}
+        onCompositionEnd={() => setIsComposing(false)}
       />
       <div className={styles.inputTool}>
-        {isStreaming && onStopStreaming && (
+        {isStreaming ? (
           <Button
             className={styles.toolItem}
-            onClick={onStopStreaming}
+            onClick={handleStopStreaming}
             size="small"
+            shape="circle"
             danger
+            title="停止回复"
           >
             停止
           </Button>
+        ) : (
+          <>
+            <Button
+              className={styles.toolItem}
+              icon={<UploadOutlined />}
+              size="small"
+              shape="circle"
+              disabled={disabled}
+              title="上传文件"
+            />
+            <Button
+              className={styles.toolItem}
+              icon={<BookOutlined />}
+              size="small"
+              shape="circle"
+              disabled={disabled}
+              title="历史记录"
+            />
+          </>
         )}
-        <Button
-          className={styles.toolItem}
-          icon={<UploadOutlined />}
-          size="small"
-          shape="circle"
-          disabled={disabled}
-        />
-        <Button
-          className={styles.toolItem}
-          icon={<BookOutlined />}
-          size="small"
-          shape="circle"
-          disabled={disabled}
-        />
       </div>
     </div>
   );
