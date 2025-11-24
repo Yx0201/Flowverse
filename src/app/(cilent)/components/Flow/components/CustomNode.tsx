@@ -8,6 +8,8 @@ import {
   useReactFlow,
   useOnSelectionChange,
   useInternalNode,
+  Handle,
+  Position
 } from "@xyflow/react";
 import { useCallback, useState } from "react";
 import { generateColorScheme } from "@/app/(cilent)/utils/colorAlgorithm";
@@ -91,6 +93,7 @@ const CustomNode = ({
       }}
       className={styles.nodeRoot}
     >
+      <Handle type="target" position={Position.Top} />
       <NodeResizer
         minWidth={200}
         minHeight={100}
@@ -125,6 +128,7 @@ const CustomNode = ({
         <div>{label}</div>
         <div></div>
       </div>
+      <Handle type="source" position={Position.Bottom} />
     </div>
   );
 };

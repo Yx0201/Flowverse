@@ -1,15 +1,14 @@
 "use client";
 
-import { ReactFlow, MiniMap, Node, Controls } from "@xyflow/react";
+import { ReactFlow, MiniMap, Node, Controls,useReactFlow } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useState } from "react";
+import { useState,useEffect } from "react";
 import CustomNode from "./CustomNode";
 
 const defaultNodes = [
   {
     id: "1",
-    type: "custom",
-    data: { label: "Output Node" },
+    data: { label: "欢迎提问" },
     position: { x: 250, y: 250 },
   },
 ];
@@ -34,13 +33,35 @@ const fitViewOptions = {
   duration: 800,
 };
 
-const Flow = () => {
-  const [nodes, setNodes] = useState(defaultNodes);
-  const [edges, setEdges] = useState(defaultEdges);
+
+const Flow = ({message}:{message?:string}) => {
+  // const [nodes, setNodes] = useState();
+  // const [edges, setEdges] = useState();
+  const {setNodes,setEdges}=useReactFlow();
+
+  useEffect(() => {
+    if(message?.trim()){
+      const newNode = {
+        id: (defaultNodes.length + 1).toString(),
+        data: { label: message },
+        type: "custom",
+        position: { x: Math.random() * 400, y: Math.random() * 400 },
+      };
+      const newEdge = {
+        id: `e${defaultNodes.length}-${defaultNodes.length + 1}`,
+        source: "1",
+        target: newNode.id,
+      };
+      setNodes((nds) => [...nds, newNode]);
+      // Optionally, you can also add edges here if needed
+      setEdges((eds) => [...eds, newEdge]);
+    }
+  }, [message,setNodes,setEdges]);
+
   return (
     <ReactFlow
-      defaultNodes={nodes}
-      defaultEdges={edges}
+      defaultNodes={defaultNodes}
+      defaultEdges={[]}
       fitView
       fitViewOptions={fitViewOptions}
       nodeTypes={nodeTypes}
