@@ -1,83 +1,54 @@
 "use client";
-import {
-  Controls,
-  MiniMap,
-  ReactFlow,
-  addEdge,
-  applyEdgeChanges,
-  applyNodeChanges,
-} from "@xyflow/react";
+
+import { ReactFlow, MiniMap, Node, Controls } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useState } from "react";
-import type {
-  NodeChange,
-  EdgeChange,
-  Connection,
-  Node,
-  Edge,
-} from "@xyflow/react";
+import { useState } from "react";
 import CustomNode from "./CustomNode";
 
-// 定义节点类型
-const nodeTypes = {
-  customNode: CustomNode,
-};
-
-const initialNodes: Node[] = [
+const defaultNodes = [
   {
-    id: "assistant-1",
-    position: { x: 100, y: 100 },
-    type: "customNode",
-    data: {
-      label: "智能助手",
-      description: "我是智能助手，欢迎提问",
-      nodeType: "AI"
-    },
+    id: "1",
+    type: "custom",
+    data: { label: "Output Node" },
+    position: { x: 250, y: 250 },
   },
 ];
-const initialEdges: Edge[] = [];
 
-const fitViewOptions = {
-  minZoom: 0.5, // 最小缩放
-  maxZoom: 0.9, // 最大缩放
-  duration: 500, // 过渡动画 800ms
+const defaultEdges = [
+  { id: "e1-2", source: "1", target: "2" },
+  { id: "e2-3", source: "2", target: "3", animated: true },
+];
+
+const nodeColor = (node: Node): string => {
+  const color = node.data?.color;
+  return typeof color === "string" ? color : "#eee";
 };
 
-export default function FlowContent() {
-  const [nodes, setNodes] = useState<Node[]>(initialNodes);
-  const [edges, setEdges] = useState<Edge[]>(initialEdges);
+const nodeTypes = {
+  custom: CustomNode,
+};
 
-  const onNodesChange = useCallback(
-    (changes: NodeChange[]) =>
-      setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot)),
-    []
-  );
-  const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) =>
-      setEdges((edgesSnapshot) => applyEdgeChanges(changes, edgesSnapshot)),
-    []
-  );
-  const onConnect = useCallback(
-    (params: Connection) =>
-      setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot)),
-    []
-  );
+const fitViewOptions = {
+  minZoom: 0.5,
+  maxZoom: 0.9,
+  duration: 800,
+};
 
+const Flow = () => {
+  const [nodes, setNodes] = useState(defaultNodes);
+  const [edges, setEdges] = useState(defaultEdges);
   return (
-    <div style={{ width: "100vw", height: "100vh" }}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        fitView
-        fitViewOptions={fitViewOptions}
-        nodeTypes={nodeTypes}
-      >
-        <Controls fitViewOptions={fitViewOptions} />
-        <MiniMap />
-      </ReactFlow>
-    </div>
+    <ReactFlow
+      defaultNodes={nodes}
+      defaultEdges={edges}
+      fitView
+      fitViewOptions={fitViewOptions}
+      nodeTypes={nodeTypes}
+    >
+      <MiniMap nodeColor={nodeColor} zoomable pannable />
+      <Controls fitViewOptions={fitViewOptions} />
+    </ReactFlow>
   );
-}
+};
+
+export default Flow;
