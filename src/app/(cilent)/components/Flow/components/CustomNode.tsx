@@ -9,7 +9,7 @@ import {
   useOnSelectionChange,
   useInternalNode,
   Handle,
-  Position
+  Position,
 } from "@xyflow/react";
 import { useCallback, useState } from "react";
 import { generateColorScheme } from "@/app/(cilent)/utils/colorAlgorithm";
@@ -18,7 +18,7 @@ import styles from "./customNode.module.scss";
 import { Focus } from "lucide-react";
 
 export type RectangleNodeType = Node<
-  { color: string; label: string },
+  { color: string; label: string; content: { think?: string; val: string } },
   "custom"
 >;
 
@@ -38,7 +38,11 @@ const CustomNode = ({
   id,
   selected,
   dragging,
-  data: { color, label },
+  data: {
+    color,
+    label,
+    content: { think = "", val },
+  },
 }: NodeProps<RectangleNodeType>) => {
   const { updateNodeData, setCenter } = useReactFlow();
   const internalNode = useInternalNode(id);
@@ -66,7 +70,7 @@ const CustomNode = ({
   };
 
   const setViewCenter = () => {
-    console.log(internalNode,'internalNode')
+    console.log(internalNode, "internalNode");
     const absolutePosition = internalNode?.internals.positionAbsolute ?? {
       x: 0,
       y: 0,
@@ -126,7 +130,8 @@ const CustomNode = ({
       </NodeToolbar>
       <div style={{ padding: "10px" }}>
         <div>{label}</div>
-        <div></div>
+        {think.trim() && <div>{think}</div>}
+        <div>{val}</div>
       </div>
       <Handle type="source" position={Position.Bottom} />
     </div>
