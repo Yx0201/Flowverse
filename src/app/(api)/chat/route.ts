@@ -1,135 +1,85 @@
-import { NextRequest, NextResponse } from "next/server";
+// app/api/chat/route.ts (修改 SSE 包装为 JSON 对象)
 
-// API响应接口定义
-interface ApiResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  message?: string;
-  timestamp: string;
-}
+import { NextRequest } from 'next/server';
+import { getOllamaChatStream, OllamaMessage, OllamaChatResponseChunk } from '@/lib/ollamaService';
 
-// 请求体接口定义
-interface ChatRequest {
-  data: string;
-  [key: string]: unknown;
-}
+export const runtime = 'edge'; 
 
-// 响应数据接口定义
-interface ChatResponse {
-  message: string;
-  list: unknown[];
-}
-
-/**
- * 处理聊天API请求
- * @param request NextRequest对象
- * @returns Promise<NextResponse> API响应
- */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export async function POST(req: NextRequest) {
   try {
-    // 验证Content-Type
-    const contentType = request.headers.get("content-type");
-    if (!contentType?.includes("application/json")) {
-      return createErrorResponse("Content-Type必须是application/json", 415);
+    const { messages } = await req.json();
+    if (!Array.isArray(messages)) {
+      return new Response(JSON.stringify({ error: 'Missing or invalid messages array' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    // 解析请求体
-    const body = await request.json();
+    const ollamaStream = await getOllamaChatStream(messages as OllamaMessage[]);
+    
+    const transformStream = new TransformStream({
+      async transform(chunk, controller) {
+        const text = new TextDecoder().decode(chunk);
+        const lines = text.split('\n').filter(line => line.trim() !== '');
 
-    // 验证请求数据
-    const validationResult = validateRequest(body);
-    if (!validationResult.isValid) {
-      return createErrorResponse(validationResult.error!, 400);
-    }
+        for (const line of lines) {
+          try {
+            const data: OllamaChatResponseChunk = JSON.parse(line);
+            
+            const responseText = data.message?.content; 
 
-    const { data } = body as ChatRequest;
+            if (responseText) {
+              // 1. 构建要发送的 JSON 对象
+              const payload = {
+                content: responseText, // Ollama 返回的内容片段
+                time: new Date().toISOString(), // 添加当前时间戳
+                // future_data: '...' // 后续可扩展其他字段
+              };
 
-    // 处理业务逻辑
-    const responseData: ChatResponse = {
-      message: `请求成功，接收到的数据: ${data}`,
-      list: [],
-    };
+              // 2. 将 JSON 对象转换为字符串
+              const jsonString = JSON.stringify(payload);
 
-    return createSuccessResponse(responseData, "请求处理成功");
+              // 3. 按照 Server-Sent Events (SSE) 规范格式化数据
+              // 格式: data: [JSON 字符串]\n\n
+              const sseEvent = `data: ${jsonString}\n\n`;
+              controller.enqueue(new TextEncoder().encode(sseEvent));
+            }
+
+            // 检查是否完成
+            if (data.done) {
+                // 对于完成标记，也最好封装成 JSON，或者使用 event: done
+                const donePayload = {
+                    content: '[DONE]',
+                    time: new Date().toISOString(),
+                    status: 'completed'
+                };
+                const sseEvent = `event: done\ndata: ${JSON.stringify(donePayload)}\n\n`;
+                controller.enqueue(new TextEncoder().encode(sseEvent));
+            }
+          } catch (error) {
+            // 解析失败时跳过
+            console.warn('Skipping chunk due to JSON parse error:', line);
+          }
+        }
+      },
+      flush(controller) {
+          controller.terminate();
+      }
+    });
+
+    return new Response(ollamaStream.pipeThrough(transformStream), {
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+      },
+    });
 
   } catch (error) {
-
-    // 处理不同类型的错误
-    if (error instanceof SyntaxError) {
-      return createErrorResponse("请求体格式错误", 400);
-    }
-
-    return createErrorResponse("服务器内部错误", 500);
+    console.error('API Error:', error);
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Internal Server Error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
-}
-
-/**
- * 创建成功响应
- * @param data 响应数据
- * @param message 响应消息
- * @returns NextResponse
- */
-function createSuccessResponse<T>(data: T, message: string = "Success"): NextResponse {
-  const response: ApiResponse<T> = {
-    success: true,
-    data,
-    message,
-    timestamp: new Date().toISOString(),
-  };
-
-  return NextResponse.json(response, {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-    }
-  });
-}
-
-/**
- * 创建错误响应
- * @param message 错误消息
- * @param status HTTP状态码
- * @returns NextResponse
- */
-function createErrorResponse(message: string, status: number): NextResponse {
-  const response: ApiResponse = {
-    success: false,
-    message,
-    timestamp: new Date().toISOString(),
-  };
-
-  return NextResponse.json(response, {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-    }
-  });
-}
-
-/**
- * 验证请求数据
- * @param body 请求体
- * @returns 验证结果
- */
-function validateRequest(body: unknown): { isValid: boolean; error?: string } {
-  if (!body || typeof body !== "object") {
-    return { isValid: false, error: "请求体不能为空" };
-  }
-
-  const { data } = body as ChatRequest;
-
-  if (!data) {
-    return { isValid: false, error: "缺少必需的data参数" };
-  }
-
-  if (typeof data !== "string") {
-    return { isValid: false, error: "data参数必须是字符串类型" };
-  }
-
-  if (data.trim().length === 0) {
-    return { isValid: false, error: "data参数不能为空字符串" };
-  }
-
-  return { isValid: true };
 }

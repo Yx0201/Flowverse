@@ -1,208 +1,69 @@
-"use client";
+'use client';
 
-import React from 'react';
-import Markdown from 'react-markdown';
+import React, { memo, type JSX, type ComponentPropsWithoutRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import oneDark from 'react-syntax-highlighter/dist/esm/styles/prism/one-dark';
-import 'katex/dist/katex.min.css';
+import { oneLight } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 
 interface MarkdownRendererProps {
   content: string;
-  className?: string;
 }
 
-const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className }) => {
-  // 自定义代码块渲染器，支持语法高亮
-  const CodeBlock = React.memo(({ children, className, ...props }: any) => {
-    const match = /language-(\w+)/.exec(className || '');
-    const language = match ? match[1] : '';
+// 定义代码组件的 Props 类型，继承原生 code 标签的属性
+type CodeComponentProps = ComponentPropsWithoutRef<'code'>;
 
-    return match ? (
-      <SyntaxHighlighter
-        {...props}
-        PreTag="div"
-        language={language}
-        style={oneDark}
-        showLineNumbers={true}
-        wrapLines={true}
-        customStyle={{
-          borderRadius: '8px',
-          fontSize: '14px',
-          margin: '8px 0',
-        }}
-      >
-        {String(children).replace(/\n$/, '')}
-      </SyntaxHighlighter>
-    ) : (
-      <code
-        {...props}
-        className={`bg-gray-100 px-1 py-0.5 rounded text-sm ${className || ''}`}
-      >
-        {children}
-      </code>
-    );
-  });
-
-  CodeBlock.displayName = 'CodeBlock';
-
-  // 自定义内联代码渲染器
-  const InlineCode = React.memo(({ children, ...props }: any) => (
-    <code
-      {...props}
-      className="bg-blue-100 text-blue-800 px-1 py-0.5 rounded text-sm font-mono"
-    >
-      {children}
-    </code>
-  ));
-
-  InlineCode.displayName = 'InlineCode';
-
-  // 自定义表格渲染器
-  const Table = React.memo(({ children, ...props }: any) => (
-    <div className="overflow-x-auto my-4">
-      <table
-        {...props}
-        className="min-w-full border-collapse border border-gray-200 rounded-lg"
-      >
-        {children}
-      </table>
-    </div>
-  ));
-
-  Table.displayName = 'Table';
-
-  const TableHead = React.memo(({ children, ...props }: any) => (
-    <thead {...props} className="bg-gray-50">
-      {children}
-    </thead>
-  ));
-
-  TableHead.displayName = 'TableHead';
-
-  const TableBody = React.memo(({ children, ...props }: any) => (
-    <tbody {...props} className="divide-y divide-gray-200">
-      {children}
-    </tbody>
-  ));
-
-  TableBody.displayName = 'TableBody';
-
-  const TableRow = React.memo(({ children, ...props }: any) => (
-    <tr {...props} className="hover:bg-gray-50">
-      {children}
-    </tr>
-  ));
-
-  TableRow.displayName = 'TableRow';
-
-  const TableCell = React.memo(({ children, ...props }: any) => (
-    <td
-      {...props}
-      className="px-4 py-2 text-sm border border-gray-200"
-    >
-      {children}
-    </td>
-  ));
-
-  TableCell.displayName = 'TableCell';
-
-  const TableHeaderCell = React.memo(({ children, ...props }: any) => (
-    <th
-      {...props}
-      className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border border-gray-200"
-    >
-      {children}
-    </th>
-  ));
-
-  TableHeaderCell.displayName = 'TableHeaderCell';
-
-  // 自定义块引用渲染器
-  const Blockquote = React.memo(({ children, ...props }: any) => (
-    <blockquote
-      {...props}
-      className="border-l-4 border-blue-500 pl-4 py-2 my-4 bg-blue-50 italic"
-    >
-      {children}
-    </blockquote>
-  ));
-
-  Blockquote.displayName = 'Blockquote';
-
-  // 自定义列表渲染器
-  const UnorderedList = React.memo(({ children, ...props }: any) => (
-    <ul {...props} className="list-disc list-inside my-4 space-y-1">
-      {children}
-    </ul>
-  ));
-
-  UnorderedList.displayName = 'UnorderedList';
-
-  const OrderedList = React.memo(({ children, ...props }: any) => (
-    <ol {...props} className="list-decimal list-inside my-4 space-y-1">
-      {children}
-    </ol>
-  ));
-
-  OrderedList.displayName = 'OrderedList';
-
-  const ListItem = React.memo(({ children, ...props }: any) => (
-    <li {...props} className="ml-4">
-      {children}
-    </li>
-  ));
-
-  ListItem.displayName = 'ListItem';
-
-  // 自定义链接渲染器
-  const Link = React.memo(({ href, children, ...props }: any) => (
-    <a
-      {...props}
-      href={href}
-      className="text-blue-600 hover:text-blue-800 underline"
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      {children}
-    </a>
-  ));
-
-  Link.displayName = 'Link';
-
+const MarkdownRenderer: React.FC<MarkdownRendererProps> = memo(({ content }) => {
   return (
-    <div className={`prose prose-sm max-w-none ${className || ''}`}>
-      <Markdown
-        remarkPlugins={[
-          remarkGfm,
-          remarkMath,
-        ]}
-        rehypePlugins={[
-          rehypeKatex,
-          rehypeRaw,
-        ]}
+    <article className="prose prose-slate max-w-none dark:prose-invert">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
         components={{
-          code: CodeBlock,
-          table: Table,
-          thead: TableHead,
-          tbody: TableBody,
-          tr: TableRow,
-          td: TableCell,
-          th: TableHeaderCell,
-          blockquote: Blockquote,
-          ul: UnorderedList,
-          ol: OrderedList,
-          li: ListItem,
-          a: Link,
+          code({ className, children, ...props }: CodeComponentProps) {
+            // 1. 获取语言类型 (例如 language-js)
+            const match = /language-(\w+)/.exec(className || '');
+            
+            // 2. 判断逻辑：
+            // 如果有 match (说明声明了语言，如 ```js)，则是代码块
+            // 如果没有 match，通常是内联代码 (如 `const a = 1`)
+            const isMatch = match ? true : false;
+
+            if (!isMatch) {
+              // --- 内联代码样式 (Inline Code) ---
+              return (
+                <code 
+                  className="bg-gray-100 text-red-500 px-1 py-0.5 rounded text-sm font-mono mx-1" 
+                  {...props}
+                >
+                  {children}
+                </code>
+              );
+            }
+
+            // --- 代码块样式 (Block Code) ---
+            return (
+              <SyntaxHighlighter
+                {...props}
+                style={oneLight}
+                language={match![1]} // 强制断言 match 存在，因为上面已判断
+                PreTag="div" // 外层标签使用 div 避免 p 标签嵌套报错
+                showLineNumbers={true} // 可选：显示行号
+                wrapLongLines={true}   // 可选：自动换行
+              >
+                {String(children).replace(/\n$/, '')}
+              </SyntaxHighlighter>
+            );
+          },
         }}
       >
         {content}
-      </Markdown>
-    </div>
+      </ReactMarkdown>
+    </article>
   );
-};
+});
+
+MarkdownRenderer.displayName = 'MarkdownRenderer';
 
 export default MarkdownRenderer;

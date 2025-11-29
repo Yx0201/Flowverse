@@ -4,13 +4,15 @@ import {
   ReactFlow,
   MiniMap,
   Node,
+  Edge,
   Controls,
   useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useState, useEffect, useRef } from "react";
-import CustomNode from "./CustomNode";
-import type { addNodeProps } from "@/app/(cilent)/type";
+import { useEffect, useRef, useCallback } from "react";
+import CustomNode, { type RectangleNodeType } from "./CustomNode";
+import type { Message } from "@/app/(cilent)/type";
+import { parseAIContent } from "@/app/(cilent)/utils/contentParser";
 
 const nodeColor = (node: Node): string => {
   const color = node.data?.color;
@@ -27,213 +29,210 @@ const fitViewOptions = {
   duration: 800,
 };
 
-const Flow = ({ message }: { message?: addNodeProps }) => {
-  const { setNodes, setEdges, getNodes, getEdges, setCenter, updateNodeData } =
-    useReactFlow();
-  const nodeCountRef = useRef(0);
-  // 保存当前正在等待 AI 流式更新的 AI 节点 id
-  const aiNodeIdRef = useRef<string | null>(null);
+// 根据角色获取节点标签
+const getNodeLabel = (role: Message["role"]): string => {
+  switch (role) {
+    case "user":
+      return "用户提问";
+    case "assistant":
+      return "AI回复";
+    case "system":
+      return "系统消息";
+    default:
+      return "未知消息";
+  }
+};
 
+// 根据角色获取节点颜色
+const getNodeColor = (role: Message["role"]): string => {
+  switch (role) {
+    case "user":
+      return "#e0f2fe"; // 浅蓝色
+    case "assistant":
+      return "#f0fdf4"; // 浅绿色
+    case "system":
+      return "#fef3c7"; // 浅黄色
+    default:
+      return "#f5efe9"; // 默认灰色
+  }
+};
+
+const Flow = ({ message }: { message?: Message[] }) => {
+  const { setNodes, setEdges, getNodes, getEdges, setCenter } = useReactFlow();
+  const processedMessagesRef = useRef<Set<number>>(new Set());
+  const lastAiMessageIdRef = useRef<string | null>(null);
+
+  // 计算节点位置
+  const calculateNodePosition = useCallback(
+    (existingNodes: Node[]): { x: number; y: number } => {
+      const defaultX = 250;
+      const defaultY = 50;
+      const verticalSpacing = 50;
+
+      if (existingNodes.length === 0) {
+        return { x: defaultX, y: defaultY };
+      }
+
+      const lastNode = existingNodes[existingNodes.length - 1];
+      return {
+        x: lastNode.position.x,
+        y:
+          lastNode.position.y +
+          (lastNode.measured?.height || 120) +
+          verticalSpacing,
+      };
+    },
+    []
+  );
+
+  // 创建新节点
+  const createNodeFromMessage = useCallback(
+    (
+      message: Message,
+      position: { x: number; y: number }
+    ): RectangleNodeType => {
+      let contentData: { think: string; val: string };
+
+      if (message.role === "assistant") {
+        // 对AI回复内容进行解析
+        const parsed = parseAIContent(message.content);
+        contentData = {
+          think: parsed.think,
+          val: parsed.val
+        };
+      } else {
+        // 非AI回复直接使用原内容
+        contentData = {
+          think: "",
+          val: message.content
+        };
+      }
+
+      return {
+        id: message.id.toString(),
+        type: "custom",
+        position,
+        data: {
+          color: getNodeColor(message.role),
+          label: getNodeLabel(message.role),
+          content: contentData,
+        },
+      };
+    },
+    []
+  );
+
+  // 处理消息变化的主要逻辑
   useEffect(() => {
-    if (!message) return;
+    if (!message || message.length === 0) return;
 
     const currentNodes = getNodes();
     const currentEdges = getEdges();
 
-    // 获取最后一个节点
-    const lastNode =
-      currentNodes.length > 0 ? currentNodes[currentNodes.length - 1] : null;
+    // 找出需要处理的新消息或更新的消息
+    const messagesToProcess = message.filter(
+      (msg) =>
+        !processedMessagesRef.current.has(msg.id) ||
+        (msg.role === "assistant" && msg.content.trim() !== "")
+    );
 
-    // 默认位置（空画布）
-    const defaultX = 250;
-    const defaultY = 50;
+    if (messagesToProcess.length === 0) return;
 
-    // 生成新节点id（并不会马上 setNodes）
-    const nextId = () => `node-${nodeCountRef.current + 1}`;
+    const newNodes = [...currentNodes];
+    const newEdges = [...currentEdges];
+    let needsUpdate = false;
 
-    // Helper：基于基准节点计算下一个 y
-    const computeBelowPosition = (baseNode: any, extraY = 50) => {
-      if (!baseNode) return { x: defaultX, y: defaultY };
-      const height = baseNode.measured?.height ?? 100;
-      return {
-        x: baseNode.position.x,
-        y: baseNode.position.y + height + extraY,
-      };
-    };
+    messagesToProcess.forEach((msg) => {
+      const nodeId = msg.id.toString();
+      const existingNode = newNodes.find((node) => node.id === nodeId);
 
-    if (message.label === "User Node") {
-      // 创建用户节点和一个空的 AI 节点
-      const userNodeId = nextId();
-      nodeCountRef.current += 1;
-      const userPos = lastNode
-        ? computeBelowPosition(lastNode)
-        : { x: defaultX, y: defaultY };
+      if (existingNode) {
+        // 如果节点已存在，更新内容（主要用于AI流式输出）
+        const currentContent =
+          (existingNode.data as RectangleNodeType["data"]).content?.val || "";
+        if (currentContent !== msg.content) {
+          let newContentData: { think: string; val: string };
 
-      const userNode = {
-        id: userNodeId,
-        data: {
-          label: message.label,
-          content: message.content,
-          color: "#fefefe",
-        },
-        position: userPos,
-        type: "custom",
-      };
+          if (msg.role === "assistant") {
+            // 对AI回复内容进行重新解析
+            const parsed = parseAIContent(msg.content);
+            newContentData = {
+              think: parsed.think,
+              val: parsed.val
+            };
+          } else {
+            // 非AI回复保持原有逻辑
+            newContentData = {
+              think: (existingNode.data as RectangleNodeType["data"]).content?.think || "",
+              val: msg.content
+            };
+          }
 
-      // 创建 AI 节点，初始 content 为空，后续流式更新会更新它
-      const aiNodeId = `node-${nodeCountRef.current + 1}`;
-      nodeCountRef.current += 1;
-      const aiPos = computeBelowPosition(userNode);
-
-      const aiNode = {
-        id: aiNodeId,
-        data: {
-          label: "Ai Node",
-          content: { think: "", val: "" },
-          color: "#f7f7fa",
-        },
-        position: aiPos,
-        type: "custom",
-      };
-
-      // 存储 ai 节点 id 以便后续 updateNodeData 使用
-      aiNodeIdRef.current = aiNodeId;
-
-      // 添加 nodes
-      setNodes([...currentNodes, userNode, aiNode]);
-
-      // 添加 edges： (lastNode -> userNode) + (userNode -> aiNode)
-      const newEdges: any[] = [];
-      if (lastNode) {
-        newEdges.push({
-          id: `edge-${lastNode.id}-${userNodeId}`,
-          source: lastNode.id,
-          target: userNodeId,
-        });
-      }
-      newEdges.push({
-        id: `edge-${userNodeId}-${aiNodeId}`,
-        source: userNodeId,
-        target: aiNodeId,
-      });
-
-      setEdges([...currentEdges, ...newEdges]);
-
-      // 将视图聚焦到 AI 节点中央
-      setCenter(aiPos.x + 100, aiPos.y + 50, {
-        zoom: 1.5,
-        duration: 800,
-      });
-    } else if (message.label === "Ai Node") {
-      // AI 流式更新：优先尝试更新之前创建好的 AI 节点
-      const targetAiId = aiNodeIdRef.current;
-      if (targetAiId) {
-        // 更新 AI 节点的数据
-        updateNodeData(targetAiId, {
-          content: {
-            think: message.content?.think ?? "",
-            val: message.content?.val ?? "",
-          },
-        });
-        // 继续聚焦在当前 AI 节点（可选）
-        const targetNode = currentNodes.find((n) => n.id === targetAiId);
-        if (targetNode) {
-          setCenter(
-            targetNode.position.x + (targetNode.measured?.width ?? 200) / 2,
-            targetNode.position.y + (targetNode.measured?.height ?? 100) / 2,
-            {
-              zoom: 1.5,
-              duration: 400,
-            }
-          );
+          existingNode.data = {
+            ...existingNode.data,
+            content: newContentData,
+          };
+          needsUpdate = true;
         }
       } else {
-        // 如果没有缓存的 AI 节点 id，则回退到创建单独的 AI 节点
-        const newNodeId = nextId();
-        nodeCountRef.current += 1;
-        const newPosition = lastNode
-          ? computeBelowPosition(lastNode)
-          : { x: defaultX, y: defaultY };
+        // 创建新节点
+        const position = calculateNodePosition(newNodes);
+        const newNode = createNodeFromMessage(msg, position);
 
-        const newNode = {
-          id: newNodeId,
-          data: {
-            label: "Ai Node",
-            content: {
-              think: message.content?.think ?? "",
-              val: message.content?.val ?? "",
-            },
-            color: "#fefefe",
-          },
-          position: newPosition,
-          type: "custom",
-        };
+        newNodes.push(newNode);
 
-        setNodes([...currentNodes, newNode]);
-        if (lastNode) {
-          setEdges([
-            ...currentEdges,
-            {
-              id: `edge-${lastNode.id}-${newNodeId}`,
-              source: lastNode.id,
-              target: newNodeId,
-            },
-          ]);
+        // 如果不是第一个节点，创建与上一个节点的连接
+        if (newNodes.length > 1) {
+          const prevNode = newNodes[newNodes.length - 2];
+          const newEdge: Edge = {
+            id: `${prevNode.id}-${nodeId}`,
+            source: prevNode.id,
+            target: nodeId,
+  
+          };
+          newEdges.push(newEdge);
         }
-        setCenter(newPosition.x + 100, newPosition.y + 50, {
-          zoom: 1.5,
-          duration: 800,
-        });
 
-        // 缓存这个 AI 节点 id
-        aiNodeIdRef.current = newNodeId;
-      }
-    } else {
-      // 其他情况（通用单节点创建逻辑）
-      const newNodeId = nextId();
-      nodeCountRef.current += 1;
-      const newPosition = lastNode
-        ? computeBelowPosition(lastNode)
-        : { x: defaultX, y: defaultY };
+        needsUpdate = true;
 
-      const newNode = {
-        id: newNodeId,
-        data: {
-          label: message.label ?? "Node",
-          content: message.content ?? { val: "" },
-          color: "#fefefe",
-        },
-        position: newPosition,
-        type: "custom",
-      };
-
-      setNodes([...currentNodes, newNode]);
-
-      if (lastNode) {
-        setEdges([
-          ...currentEdges,
-          {
-            id: `edge-${lastNode.id}-${newNodeId}`,
-            source: lastNode.id,
-            target: newNodeId,
-          },
-        ]);
+        // 如果是AI回复，记录ID用于后续更新
+        if (msg.role === "assistant") {
+          lastAiMessageIdRef.current = nodeId;
+        }
       }
 
-      setCenter(newPosition.x + 100, newPosition.y + 50, {
-        zoom: 1.5,
-        duration: 800,
-      });
+      // 标记消息为已处理
+      processedMessagesRef.current.add(msg.id);
+    });
+
+    // 只在有变化时更新状态
+    if (needsUpdate) {
+      setNodes(newNodes);
+      setEdges(newEdges);
+
+      // 自动聚焦到最新节点
+      if (newNodes.length > currentNodes.length) {
+        const latestNode = newNodes[newNodes.length - 1];
+        setTimeout(() => {
+          setCenter(
+            latestNode.position.x + 200, // 假设节点宽度约为300px
+            latestNode.position.y + 60, // 假设节点高度约为120px
+            { zoom: 1, duration: 500 }
+          );
+        }, 100);
+      }
     }
   }, [
     message,
-    setNodes,
-    setEdges,
     getNodes,
     getEdges,
+    setNodes,
+    setEdges,
     setCenter,
-    updateNodeData,
+    calculateNodePosition,
+    createNodeFromMessage,
   ]);
+
   return (
     <ReactFlow
       defaultNodes={[]}

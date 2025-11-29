@@ -1,8 +1,5 @@
-export interface addNodeProps {
-  // id:string;
-  label: string;
-  content: {
-    think?: string;
-    val: string;
-  };
+export interface Message {
+  role: "user" | "assistant" | "system";
+  content: string;
+  id: number;
 }

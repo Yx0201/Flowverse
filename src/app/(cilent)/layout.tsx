@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { AntdRegistry } from "@ant-design/nextjs-registry";
-import "./globals.css";
 import { ConfigProvider, App } from "antd";
 import SysNavWrapper from "./components/SysNavWrapper";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Create Next App",

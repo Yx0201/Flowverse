@@ -1,3 +1,45 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* 修复 prose 表格样式 */
+.prose {
+  /* 表格基本样式 */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1em 0;
+    border: 1px solid var(--tw-prose-td-borders);
+  }
+
+  /* 表头样式 */
+  thead {
+    border-bottom: 2px solid var(--tw-prose-th-borders);
+  }
+
+  th {
+    background-color: var(--tw-prose-th-borders);
+    font-weight: 600;
+    padding: 0.5em 0.75em;
+    text-align: left;
+    border-bottom: 2px solid var(--tw-prose-th-borders);
+  }
+
+  /* 单元格样式 */
+  td {
+    padding: 0.5em 0.75em;
+    border-bottom: 1px solid var(--tw-prose-td-borders);
+  }
+
+  /* 行样式 */
+  tbody tr {
+    border-bottom: 1px solid var(--tw-prose-td-borders);
+  }
+
+  tbody tr:last-child {
+    border-bottom: none;
+  }
+}
+
 *{
   margin: 0;
   padding: 0;
@@ -18,3 +60,4 @@ html, body {
   font-size: 0.875rem;
   text-align: center;
 }
+

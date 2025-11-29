@@ -16,6 +16,8 @@ import { generateColorScheme } from "@/app/(cilent)/utils/colorAlgorithm";
 import type { ColorResult } from "@/app/(cilent)/utils/colorAlgorithm";
 import styles from "./customNode.module.scss";
 import { Focus } from "lucide-react";
+import { Collapse, CollapseProps } from "antd";
+import MarkdownRenderer from "@/app/(cilent)/components/MarkdownRenderer";
 
 export type RectangleNodeType = Node<
   { color: string; label: string; content: { think?: string; val: string } },
@@ -86,6 +88,14 @@ const CustomNode = ({
     });
   };
 
+  const items: CollapseProps["items"] = [
+    {
+      key: "1",
+      label: "思考内容",
+      children: <span>{think}</span>,
+    },
+  ];
+
   return (
     <div
       style={{
@@ -95,12 +105,13 @@ const CustomNode = ({
         borderColor: colors?.borderColor,
         color: colors?.textColor,
       }}
-      className={styles.nodeRoot}
+      className={`${styles.nodeRoot} nowheel`}
     >
       <Handle type="target" position={Position.Top} />
       <NodeResizer
         minWidth={200}
         minHeight={100}
+        maxWidth={400}
         isVisible={selected && !dragging}
       />
       <NodeToolbar
@@ -130,8 +141,9 @@ const CustomNode = ({
       </NodeToolbar>
       <div style={{ padding: "10px" }}>
         <div>{label}</div>
-        {think.trim() && <div>{think}</div>}
-        <div>{val}</div>
+        {think && <Collapse items={items} defaultActiveKey={["1"]} />}
+
+        <MarkdownRenderer content={val}  />
       </div>
       <Handle type="source" position={Position.Bottom} />
     </div>
