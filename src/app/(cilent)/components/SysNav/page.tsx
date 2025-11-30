@@ -28,7 +28,7 @@ const SysNav = () => {
   const handleNavClick = useCallback((item: string) => {
     switch (item) {
       case 'Chat':
-        router.push('/');
+        router.push('/talk');
         break;
       case 'Knowledge':
         message.info('Knowledge feature coming soon');
