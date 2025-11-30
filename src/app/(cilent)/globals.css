@@ -1,35 +1,48 @@
+
+
 @import "tailwindcss";
-@plugin "@tailwindcss/typography";
 
-@layer components {
-  /* 定制 Markdown 表格样式 (GitHub 风格) */
-  .prose table {
-    @apply w-full text-left border-collapse border border-gray-200 my-4;
-  }
 
-  .prose table th {
-    @apply bg-gray-100 border border-gray-200 px-3 py-2 font-semibold text-gray-900;
-  }
-
-  .prose table td {
-    @apply border border-gray-200 px-3 py-2;
-  }
-
-  /* 隔行变色 */
-  .prose table tr:nth-child(2n) {
-    @apply bg-gray-50;
-  }
-  
-  /* 移除 prose 默认的过多 padding，让我们的设置生效 */
-  .prose :where(thead th, tbody td) {
-    padding: 0.5rem 0.75rem; /* px-3 py-2 equivalent */
-  }
+/* 定制 Markdown 表格样式 (GitHub 风格) */
+.prose table {
+  width: 100%;
+  text-align: left;
+  border-collapse: collapse;
+  border: 1px solid rgb(229 231 235);
+  margin-top: 1rem;
+  margin-bottom: 1rem;
 }
 
-*{
-  margin: 0;
-  padding: 0;
+.prose table th {
+  background-color: rgb(243 244 246);
+  border: 1px solid rgb(229 231 235);
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  font-weight: 600;
+  color: rgb(17 24 39);
 }
+
+.prose table td {
+  border: 1px solid rgb(229 231 235);
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/* 隔行变色 */
+.prose table tr:nth-child(2n) {
+  background-color: rgb(249 250 251);
+}
+
+/* 移除 prose 默认的过多 padding，让我们的设置生效 */
+.prose :where(thead th, tbody td) {
+  padding: 0.5rem 0.75rem; /* px-3 py-2 equivalent */
+}
+
+
 
 html, body {
   height: 100%;

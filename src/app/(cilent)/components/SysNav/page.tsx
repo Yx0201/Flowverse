@@ -31,7 +31,7 @@ const SysNav = () => {
         router.push('/talk');
         break;
       case 'Knowledge':
-        message.info('Knowledge feature coming soon');
+        router.push('/knowledge');
         break;
       case 'Agent':
         message.info('Agent feature coming soon');
