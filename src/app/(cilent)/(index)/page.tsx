@@ -48,6 +48,7 @@ const Home = () => {
       );
 
       const apiEndpoint = "/chat";
+      let fullThinkingResponse = ""; // 用于存储完整的思考过程
       let fullAssistantResponse = ""; // 用于存储完整的 AI 响应文本
 
       try {
@@ -60,28 +61,63 @@ const Home = () => {
           body: JSON.stringify({ messages: historyToSend }),
 
           onmessage(ev) {
+            console.log('消息开始接收')
             const rawData = ev.data;
 
-            if (ev.event === "done" || rawData === "[DONE]") {
-              return; // 停止处理
+            // 检查是否是 done 事件，并且内容是 [DONE]
+            if (ev.event === "done") {
+              try {
+                const parsedData = JSON.parse(rawData);
+                if (parsedData.content === "[DONE]") {
+                  return; // 真正的完成信号，停止处理
+                }
+              } catch {
+                // 如果解析失败，继续处理
+              }
             }
 
             if (rawData) {
               try {
-                // **关键修改：解析接收到的 JSON 字符串**
+                // 解析接收到的 JSON 字符串
                 const parsedData = JSON.parse(rawData);
-                const content = parsedData.content; // 提取内容字段
+                const content = parsedData.content;
+                const type = parsedData.type;
 
+                // 只有当内容存在且不是 [DONE] 标记时才处理
                 if (content && content !== "[DONE]") {
-                  fullAssistantResponse += content;
-                  // 实时更新 AI 消息
-                  setMessages((prev) =>
-                    prev.map((msg) =>
-                      msg.id === aiPlaceholderId
-                        ? { ...msg, content: msg.content + content }
-                        : msg
-                    )
-                  );
+                  if (type === 'thinking') {
+                    // 处理思考过程
+                    fullThinkingResponse += content;
+                    // 实时更新 AI 消息，将思考过程显示在特殊格式中
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === aiPlaceholderId
+                          ? { ...msg, content: fullThinkingResponse + (fullAssistantResponse ? `\n\n**回答：**${fullAssistantResponse}` : '') }
+                          : msg
+                      )
+                    );
+                  } else if (type === 'ans') {
+                    // 处理实际回答内容
+                    fullAssistantResponse += content;
+                    // 实时更新 AI 消息
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === aiPlaceholderId
+                          ? { ...msg, content: (fullThinkingResponse ? `**思考过程：**\n${fullThinkingResponse}\n\n**回答：**` : '') + fullAssistantResponse }
+                          : msg
+                      )
+                    );
+                  } else {
+                    // 兼容旧格式（没有type字段的情况）
+                    fullAssistantResponse += content;
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === aiPlaceholderId
+                          ? { ...msg, content: msg.content + content }
+                          : msg
+                      )
+                    );
+                  }
                 }
               } catch (jsonError) {
                 console.error(
@@ -95,6 +131,7 @@ const Home = () => {
           },
 
           onopen: async (response) => {
+            console.log('开始sse连接')
             if (response.ok) return;
             throw new Error(
               `Failed to connect to stream. HTTP Status: ${response.status}`
@@ -102,6 +139,7 @@ const Home = () => {
           },
 
           onerror(err) {
+            console.log('出错了')
             console.error("SSE Error:", err);
             // 在错误时，将最后的占位符替换为错误提示
             setMessages((prev) =>
@@ -121,6 +159,7 @@ const Home = () => {
           },
 
           onclose() {
+            console.log('关闭了')
             // 在流关闭时，我们不再需要占位符，但它已经包含了完整的响应。
             // 确保 isLoading 状态结束
             setIsLoading(false);

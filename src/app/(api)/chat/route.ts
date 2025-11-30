@@ -3,9 +3,17 @@
 import { NextRequest } from 'next/server';
 import { getOllamaChatStream, OllamaMessage, OllamaChatResponseChunk } from '@/lib/ollamaService';
 
-export const runtime = 'edge'; 
+export const runtime = 'edge';
 
 export async function POST(req: NextRequest) {
+  const controller = new AbortController();
+  const { signal } = controller;
+
+  // 监听请求中断，当客户端断开时中止整个流
+  req.signal.addEventListener('abort', () => {
+    controller.abort();
+  });
+
   try {
     const { messages } = await req.json();
     if (!Array.isArray(messages)) {
@@ -15,69 +23,122 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const ollamaStream = await getOllamaChatStream(messages as OllamaMessage[]);
-    
+    const ollamaStream = await getOllamaChatStream(messages as OllamaMessage[], signal);
+
     const transformStream = new TransformStream({
       async transform(chunk, controller) {
+        // 检查是否已被中止
+        if (signal.aborted) {
+          controller.terminate();
+          return;
+        }
+
         const text = new TextDecoder().decode(chunk);
         const lines = text.split('\n').filter(line => line.trim() !== '');
 
         for (const line of lines) {
           try {
-            const data: OllamaChatResponseChunk = JSON.parse(line);
-            
-            const responseText = data.message?.content; 
+            // 再次检查中止状态
+            if (signal.aborted) {
+              controller.terminate();
+              return;
+            }
 
-            if (responseText) {
-              // 1. 构建要发送的 JSON 对象
-              const payload = {
-                content: responseText, // Ollama 返回的内容片段
-                time: new Date().toISOString(), // 添加当前时间戳
-                // future_data: '...' // 后续可扩展其他字段
+            const data: OllamaChatResponseChunk = JSON.parse(line);
+
+            const thinkingText = data.message?.thinking;
+            const responseText = data.message?.content;
+
+            // 首先处理思考过程
+            if (thinkingText) {
+              const thinkingPayload = {
+                type: 'thinking',
+                content: thinkingText,
+                time: new Date().toISOString(),
+                done: data.done
               };
 
-              // 2. 将 JSON 对象转换为字符串
-              const jsonString = JSON.stringify(payload);
-
-              // 3. 按照 Server-Sent Events (SSE) 规范格式化数据
-              // 格式: data: [JSON 字符串]\n\n
+              const jsonString = JSON.stringify(thinkingPayload);
               const sseEvent = `data: ${jsonString}\n\n`;
               controller.enqueue(new TextEncoder().encode(sseEvent));
             }
 
-            // 检查是否完成
-            if (data.done) {
-                // 对于完成标记，也最好封装成 JSON，或者使用 event: done
-                const donePayload = {
-                    content: '[DONE]',
-                    time: new Date().toISOString(),
-                    status: 'completed'
-                };
-                const sseEvent = `event: done\ndata: ${JSON.stringify(donePayload)}\n\n`;
-                controller.enqueue(new TextEncoder().encode(sseEvent));
+            // 然后处理正常回复内容
+            if (responseText) {
+              const contentPayload = {
+                type: 'ans',
+                content: responseText,
+                time: new Date().toISOString(),
+                done: data.done
+              };
+
+              const jsonString = JSON.stringify(contentPayload);
+              const sseEvent = `data: ${jsonString}\n\n`;
+              controller.enqueue(new TextEncoder().encode(sseEvent));
+
             }
-          } catch (error) {
-            // 解析失败时跳过
+
+            if (data.done) {
+              const donePayload = {
+                type: 'done',
+                content: '[DONE]',
+                time: new Date().toISOString(),
+                status: 'completed'
+              };
+              const sseEvent = `event: done\ndata: ${JSON.stringify(donePayload)}\n\n`;
+              controller.enqueue(new TextEncoder().encode(sseEvent));
+            }
+          } catch {
             console.warn('Skipping chunk due to JSON parse error:', line);
           }
         }
       },
       flush(controller) {
+        if (!signal.aborted) {
           controller.terminate();
+        }
       }
     });
 
-    return new Response(ollamaStream.pipeThrough(transformStream), {
+    // 处理流传输错误，特别是连接中断
+    const pipeline = ollamaStream.pipeThrough(transformStream).pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          try {
+            controller.enqueue(chunk);
+          } catch (error) {
+            console.warn('Stream enqueue error:', error);
+            controller.terminate();
+          }
+        }
+      })
+    );
+
+    return new Response(pipeline, {
       headers: {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
       },
     });
 
   } catch (error) {
+    // 处理连接中断的特殊情况
+    if (error instanceof Error && (
+      error.message.includes('aborted') ||
+      error.message.includes('ECONNRESET') ||
+      error.name === 'AbortError'
+    )) {
+      console.log('Connection aborted by client');
+      return new Response('Connection closed', { status: 499 });
+    }
+
     console.error('API Error:', error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Internal Server Error' }), {
+    return new Response(JSON.stringify({
+      error: error instanceof Error ? error.message : 'Internal Server Error'
+    }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

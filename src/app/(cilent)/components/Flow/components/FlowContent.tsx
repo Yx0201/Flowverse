@@ -240,6 +240,11 @@ const Flow = ({ message }: { message?: Message[] }) => {
       fitView
       fitViewOptions={fitViewOptions}
       nodeTypes={nodeTypes}
+      zoomOnScroll={false}
+      // zoomOnPinch={false}
+      // zoomOnDoubleClick={false}
+      // preventScrolling={true}
+      panOnScroll={true}
     >
       <MiniMap nodeColor={nodeColor} zoomable pannable />
       <Controls fitViewOptions={fitViewOptions} />

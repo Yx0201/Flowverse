@@ -9,10 +9,10 @@ export interface ParsedContent {
 }
 
 export function parseAIContent(content: string): ParsedContent {
-  // 查找思考开始标记
-  const thinkStartIndex = content.indexOf('<think>');
+  // 查找思考过程标记
+  const thinkProcessIndex = content.indexOf('**思考过程：**');
 
-  if (thinkStartIndex === -1) {
+  if (thinkProcessIndex === -1) {
     // 没有思考内容，全部作为正式回答
     return {
       think: '',
@@ -20,25 +20,26 @@ export function parseAIContent(content: string): ParsedContent {
     };
   }
 
-  // 查找思考开始位置
-  const thinkContentStart = thinkStartIndex + '<think>'.length;
+  // 查找回答标记
+  const answerIndex = content.indexOf('**回答：**', thinkProcessIndex);
 
-  // 查找思考结束标记
-  const thinkEndIndex = content.indexOf('</think>', thinkContentStart);
-
-  if (thinkEndIndex === -1) {
-    // 只有思考开始，没有结束标记，全部内容作为思考内容
+  if (answerIndex === -1) {
+    // 只有思考过程，没有回答部分
+    const thinkContent = content.substring(thinkProcessIndex + '**思考过程：**'.length).trim();
     return {
-      think: content.substring(thinkContentStart).trim(),
+      think: thinkContent,
       val: ''
     };
   }
 
   // 提取思考内容
-  const thinkContent = content.substring(thinkContentStart, thinkEndIndex).trim();
+  const thinkContent = content.substring(
+    thinkProcessIndex + '**思考过程：**'.length,
+    answerIndex
+  ).trim();
 
-  // 提取正式回答内容（思考结束标记之后的内容）
-  const valContent = content.substring(thinkEndIndex + '</think>'.length).trim();
+  // 提取正式回答内容（回答标记之后的内容）
+  const valContent = content.substring(answerIndex + '**回答：**'.length).trim();
 
   return {
     think: thinkContent,

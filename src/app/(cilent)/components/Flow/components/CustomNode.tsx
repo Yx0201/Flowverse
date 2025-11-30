@@ -92,7 +92,7 @@ const CustomNode = ({
     {
       key: "1",
       label: "思考内容",
-      children: <span>{think}</span>,
+      children: <MarkdownRenderer content={think} />,
     },
   ];
 
@@ -111,7 +111,7 @@ const CustomNode = ({
       <NodeResizer
         minWidth={200}
         minHeight={100}
-        maxWidth={400}
+        maxWidth={600}
         isVisible={selected && !dragging}
       />
       <NodeToolbar
@@ -139,7 +139,7 @@ const CustomNode = ({
           </div>
         </div>
       </NodeToolbar>
-      <div style={{ padding: "10px" }}>
+      <div style={{ padding: "30px" }}>
         <div>{label}</div>
         {think && <Collapse items={items} defaultActiveKey={["1"]} />}
 
